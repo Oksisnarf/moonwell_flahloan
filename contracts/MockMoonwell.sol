@@ -5,35 +5,77 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract MockMoonwell {
     IERC20 public immutable usdc;
-    mapping(address => uint256) public balances;
-    mapping(address => uint256) public borrows;
+    address public owner;
+    uint256 public collateralFactorBps = 7500; // 75% in basis points (10000 = 100%)
+    
+    // Track user deposits and borrows
+    mapping(address => uint256) public collateralBalances;
+    mapping(address => uint256) public borrowBalances;
+    
+    // Track total liquidity in protocol
+    uint256 public totalReserves;
+
+    event Deposited(address indexed user, uint256 amount);
+    event Borrowed(address indexed user, uint256 amount);
+    event Repaid(address indexed user, uint256 amount);
+    event Redeemed(address indexed user, uint256 amount);
 
     constructor(address _usdc) {
         usdc = IERC20(_usdc);
+        owner = msg.sender;
     }
 
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Unauthorized");
+        _;
+    }
+
+    // Set collateral factor (7500 = 75%)
+    function setCollateralFactor(uint256 newCollateralFactorBps) external onlyOwner {
+        require(newCollateralFactorBps <= 9000, "CF too high"); // Max 90%
+        collateralFactorBps = newCollateralFactorBps;
+    }
+
+    // Deposit USDC as collateral
     function mint(uint256 mintAmount) external {
-        balances[msg.sender] += mintAmount;
+        collateralBalances[msg.sender] += mintAmount;
+        totalReserves += mintAmount;
         usdc.transferFrom(msg.sender, address(this), mintAmount);
+        emit Deposited(msg.sender, mintAmount);
     }
 
+    // Borrow against collateral (up to collateral factor)
     function borrow(uint256 borrowAmount) external {
-        require(balances[msg.sender] >= borrowAmount, "Insufficient collateral");
-        borrows[msg.sender] += borrowAmount;
-        // Mint borrowed amount to borrower
-        (bool success, ) = address(usdc).call(
-            abi.encodeWithSignature("mint(address,uint256)", msg.sender, borrowAmount)
-        );
-        require(success, "Borrow mint failed");
+        uint256 maxBorrow = (collateralBalances[msg.sender] * collateralFactorBps) / 10000;
+        require(borrowAmount <= maxBorrow, "Exceeds borrow limit");
+        require(borrowAmount <= totalReserves, "Insufficient protocol liquidity");
+
+        borrowBalances[msg.sender] += borrowAmount;
+        totalReserves -= borrowAmount;
+        usdc.transfer(msg.sender, borrowAmount);
+        emit Borrowed(msg.sender, borrowAmount);
     }
 
+    // Repay borrowed funds
     function repayBorrow(uint256 repayAmount) external {
-        borrows[msg.sender] -= repayAmount;
+        require(repayAmount <= borrowBalances[msg.sender], "Overpayment");
+        
+        borrowBalances[msg.sender] -= repayAmount;
+        totalReserves += repayAmount;
         usdc.transferFrom(msg.sender, address(this), repayAmount);
+        emit Repaid(msg.sender, repayAmount);
     }
 
-    function redeem(uint256 redeemTokens) external {
-        balances[msg.sender] -= redeemTokens;
-        usdc.transfer(msg.sender, redeemTokens);
+    // Withdraw collateral (only if healthy position)
+    function redeem(uint256 redeemAmount) external {
+        require(
+            borrowBalances[msg.sender] <= (collateralBalances[msg.sender] - redeemAmount) * collateralFactorBps / 10000,
+            "Remaining collateral insufficient"
+        );
+        
+        collateralBalances[msg.sender] -= redeemAmount;
+        totalReserves -= redeemAmount;
+        usdc.transfer(msg.sender, redeemAmount);
+        emit Redeemed(msg.sender, redeemAmount);
     }
 }

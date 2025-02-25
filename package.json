@@ -17,5 +17,8 @@
     "dotenv": "^16.4.7",
     "ethers": "^6.1.0",
     "hardhat": "^2.22.18"
+  },
+  "dependencies": {
+    "@nomicfoundation/hardhat-verify": "^2.0.12"
   }
 }

@@ -1,18 +1,26 @@
 const { time, loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
 const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
 const { expect } = require("chai");
+const { network } = require("hardhat");
 
-describe("Lock", function () {
-    async function deployOneYearLockFixture() {
-        const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
-        const unlockTime = (await time.latest()) + ONE_YEAR_IN_SECS;
+    describe("Lock", function () {
+        // Add network check at the top level
+        before(function () {
+            if (network.name === 'hardhat' && network.config.forking) {
+                this.skip();
+            }
+        });
 
-        const [owner] = await ethers.getSigners();
-        const Lock = await ethers.getContractFactory("Lock");
-        const lock = await Lock.deploy(unlockTime, { value: ethers.parseEther("1") });
+        async function deployOneYearLockFixture() {
+            const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
+            const unlockTime = (await time.latest()) + ONE_YEAR_IN_SECS;
 
-        return { lock, unlockTime, owner };
-    }
+            const [owner] = await ethers.getSigners();
+            const Lock = await ethers.getContractFactory("Lock");
+            const lock = await Lock.deploy(unlockTime, { value: ethers.parseEther("1") });
+
+            return { lock, unlockTime, owner };
+        }
 
     describe("Deployment", function () {
         it("Should set the right unlockTime", async function () {
@@ -83,4 +91,4 @@ describe("Lock", function () {
             });
         });
     });
-});
+})

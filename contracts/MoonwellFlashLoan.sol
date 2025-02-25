@@ -40,17 +40,17 @@ contract MoonwellFlashLoan is IFlashLoanSimpleReceiver {
         _;
     }
 
-    // 1. Implement `ADDRESSES_PROVIDER()`
+    // 1. Implement ADDRESSES_PROVIDER()
     function ADDRESSES_PROVIDER() external view override returns (IPoolAddressesProvider) {
         return addressesProvider;
     }
 
-    // 2. Implement `POOL()`
+    // 2. Implement POOL()
     function POOL() external view override returns (IPool) {
         return aavePool;
     }
 
-    // 3. Implement `executeOperation()`
+    // 3. Implement executeOperation()
     function executeOperation(
         address, // asset
         uint256 amount,
@@ -85,7 +85,10 @@ contract MoonwellFlashLoan is IFlashLoanSimpleReceiver {
 
     function reinvestProfits() external onlyOwner {
         uint256 profits = usdc.balanceOf(address(this));
-        executeFlashLoan(profits);
-        emit ProfitsReinvested(profits);
+        uint256 premium = (profits * 9) / 10000; // 0.09% fee
+        uint256 availableAmount = profits - premium;
+        
+        executeFlashLoan(availableAmount);
+        emit ProfitsReinvested(availableAmount);
     }
 }
